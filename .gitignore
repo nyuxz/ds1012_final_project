@@ -2,8 +2,8 @@ SQuAD/*
 *.log
 glove/*
 *.ipynb
-
-
+src/__pycache__/*
+*.DS_Store
 # Prerequisites
 *.d
 
