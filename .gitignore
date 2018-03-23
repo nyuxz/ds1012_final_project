@@ -1,4 +1,8 @@
-src/*
+SQuAD/*
+*.log
+glove/*
+*.ipynb
+
 
 # Prerequisites
 *.d
