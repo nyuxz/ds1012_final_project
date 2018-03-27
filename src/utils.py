@@ -31,3 +31,8 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def lr_decay(optimizer, lr_decay):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] *= lr_decay
+    log.info('[learning rate reduced by {}]'.format(lr_decay))
+    return optimizer

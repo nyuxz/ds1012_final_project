@@ -1,7 +1,7 @@
 import re
 import os
 import json
-import spacy
+#import spacy
 import msgpack
 import unicodedata
 import numpy as np
@@ -21,6 +21,8 @@ from shutil import copyfile
 from datetime import datetime
 from collections import Counter
 from dataloader import *
+from drqa.model import DocReaderModel
+from evaluation import *
 
 
 
@@ -117,9 +119,11 @@ log.addHandler(fh)
 log.addHandler(ch)
 
 
+def test_loader():
+    '''
+    this function used to test dataloader and print input data/check dimensions 
+    '''
 
-
-def main():
     log.info('[program starts.]')
     train, dev, dev_y, embedding, opt = load_data(vars(args))
     log.info(opt)
@@ -131,17 +135,112 @@ def main():
     for i, batch in enumerate(batches):
         inputs = [Variable(e) for e in batch[:7]]
 
-    #question_mask
-    print('question_mask of last input in the batch is {}'.format(inputs[6]))
+    print('context_id{}'.format(inputs[0]))
+    print('.............................................................')
 
-    # text
-    print('text of last input in the batch is {}'.format(batch[9]))
+    print('context_feature{}'.format(inputs[1]))
+    print('.............................................................')
+
+    print('context_tag POS{}'.format(inputs[2]))
+    print('.............................................................')
+
+    print('context_ent{}'.format(inputs[3]))
+    print('.............................................................')
+
+    print('context_mask{}'.format(inputs[4]))
+    print('.............................................................')
+
+    print('qquestion_id{}'.format(inputs[5]))
+    print('.............................................................')
+
+    print('question_mask{}'.format(inputs[6]))
+    print('.............................................................')
+
+    #print('y_s{}'.format(inputs[7]))
+    #print('.............................................................')
+
+    #print('y_e{}'.format(inputs[8]))
+    #print('.............................................................')
+
+    print('text{}'.format(batch[9]))
+    print('.............................................................')
+
+    print('span{}'.format(batch[10]))
+    print('.............................................................')
 
 
+def main():
+    log.info('[program starts.]')
+    train, dev, dev_y, embedding, opt = load_data(vars(args))
+    log.info(opt)
+    log.info('[Data loaded.]')
 
+    if args.resume:
+        log.info('[loading previous model...]')
+        checkpoint = torch.load(os.path.join(model_dir, args.resume))
+        if args.resume_options:
+            opt = checkpoint['config']
+        state_dict = checkpoint['state_dict']
+        model = DocReaderModel(opt, embedding, state_dict)
+        epoch_0 = checkpoint['epoch'] + 1
+        for i in range(checkpoint['epoch']):
+            # synchronize random seed
+            random.setstate(checkpoint['random_state'])
+            torch.random.set_rng_state(checkpoint['torch_state'])
+            torch.cuda.set_rng_state(checkpoint['torch_cuda_state'])
+        if args.reduce_lr:
+            lr_decay(model.optimizer, lr_decay=args.reduce_lr)
+    else:
+        model = DocReaderModel(opt, embedding)
+        epoch_0 = 1
+
+    if args.cuda:
+        model.cuda()
+
+    if args.resume:
+        batches = BatchGen(opt, dev, batch_size=args.batch_size, evaluation=True, gpu=args.cuda)
+        predictions = []
+        for batch in batches:
+            predictions.extend(model.predict(batch))
+        em, f1 = score(predictions, dev_y)
+        log.info("[dev EM: {} F1: {}]".format(em, f1))
+        best_val_score = f1
+    else:
+        best_val_score = 0.0
+
+    for epoch in range(epoch_0, epoch_0 + args.epochs):
+        log.warning('Epoch {}'.format(epoch))
+        # train
+        batches = BatchGen(opt, train, batch_size=args.batch_size, gpu=args.cuda)
+        start = datetime.now()
+        for i, batch in enumerate(batches):
+            model.update(batch)
+            if i % args.log_per_updates == 0:
+                log.info('epoch [{0:2}] updates[{1:6}] train loss[{2:.5f}] remaining[{3}]'.format(
+                    epoch, model.updates, model.train_loss.value,
+                    str((datetime.now() - start) / (i + 1) * (len(batches) - i - 1)).split('.')[0]))
+        # eval
+        if epoch % args.eval_per_epoch == 0:
+            batches = BatchGen(opt, dev, batch_size=args.batch_size, evaluation=True, gpu=args.cuda)
+            predictions = []
+            for batch in batches:
+                predictions.extend(model.predict(batch))
+            em, f1 = score(predictions, dev_y)
+            log.warning("dev EM: {} F1: {}".format(em, f1))
+        # save
+        if not args.save_last_only or epoch == epoch_0 + args.epochs - 1:
+            model_file = os.path.join(model_dir, 'checkpoint_epoch_{}.pt'.format(epoch))
+            model.save(model_file, epoch)
+            if f1 > best_val_score:
+                best_val_score = f1
+                copyfile(
+                    model_file,
+                    os.path.join(model_dir, 'best_model.pt'))
+                log.info('[new best model saved.]')
 
 
 if __name__ == '__main__':
+    #test_loader()
     main()
 
 
