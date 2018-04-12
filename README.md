@@ -10,3 +10,6 @@ to test dataloader
 ```python
 python src/main.py
 ``` 
+download Pre-trained character-level vector     
+http://www.logos.t.u-tokyo.ac.jp/~hassy/publications/arxiv2016jmt/jmt_pre-trained_embeddings.tar.gz
+
