@@ -89,6 +89,8 @@ class BatchGen:
             for i, doc in enumerate(batch[5]):
                 question_id[i, :len(doc)] = torch.LongTensor(doc)
 
+            # mask: if id is 0, then mask is 1, otherwise mask is 0
+            # in question_id and context_id, the 0 means padding
             context_mask = torch.eq(context_id, 0)
             question_mask = torch.eq(question_id, 0)
             text = list(batch[6])
@@ -110,4 +112,3 @@ class BatchGen:
             else:
                 yield (context_id, context_feature, context_tag, context_ent, context_mask,
                        question_id, question_mask, y_s, y_e, text, span)
-

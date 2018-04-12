@@ -35,8 +35,9 @@ parser.add_argument('--batch_size', type=int, default=64,
 args = parser.parse_args()
 trn_file = 'SQuAD/train-v1.1.json'
 dev_file = 'SQuAD/dev-v1.1.json'
-wv_file = args.wv_file
-wv_dim = args.wv_dim
+wv_file = args.wv_file #glove
+wv_dim = args.wv_dim #default = 300
+
 
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG,
                     datefmt='%m/%d/%Y %I:%M:%S')
@@ -58,8 +59,8 @@ def flatten_json(data_file, mode):
                 id_, question, answers = qa['id'], qa['question'], qa['answers']
                 if mode == 'train':
                     answer = answers[0]['text']  # in training data there's only one answer
-                    answer_start = answers[0]['answer_start']
-                    answer_end = answer_start + len(answer)
+                    answer_start = answers[0]['answer_start'] # char level length
+                    answer_end = answer_start + len(answer) # char level lenght
                     rows.append((id_, context, question, answer, answer_start, answer_end))
                 else:  # mode == 'dev'
                     answers = [a['text'] for a in answers]
@@ -87,6 +88,11 @@ nlp = None
 
 def init():
     """initialize spacy in each process"""
+    '''
+    'en': Noun chunks are "base noun phrases" – flat phrases that have a noun as their head.
+    parser=False or disable=['parser'] : don't need any of the syntactic information,
+                                        and will make spaCy load and run much faster.
+    '''
     global nlp
     nlp = spacy.load('en', parser=False)
 
@@ -100,10 +106,14 @@ def annotate(row):
     context_tokens = [normalize_text(w.text) for w in c_doc]
     question_tokens_lower = [w.lower() for w in question_tokens]
     context_tokens_lower = [w.lower() for w in context_tokens]
-    context_token_span = [(w.idx, w.idx + len(w.text)) for w in c_doc]
-    context_tags = [w.tag_ for w in c_doc]
-    context_ents = [w.ent_type_ for w in c_doc]
+    context_token_span = [(w.idx, w.idx + len(w.text)) for w in c_doc] # the lenghth of each tokens
+    context_tags = [w.tag_ for w in c_doc] # POS tagging
+    context_ents = [w.ent_type_ for w in c_doc] # NER tagging
+
     question_lemma = {w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower() for w in q_doc}
+    # PRON is such as me/it/you
+    # lemma_ : cats -> cat
+
     question_tokens_set = set(question_tokens)
     question_tokens_lower_set = set(question_tokens_lower)
     match_origin = [w in question_tokens_set for w in context_tokens]
@@ -112,7 +122,9 @@ def annotate(row):
     # term frequency in document
     counter_ = collections.Counter(context_tokens_lower)
     total = len(context_tokens_lower)
+    # frequent feature
     context_tf = [counter_[w] / total for w in context_tokens_lower]
+    # exact match feature refering to the paper
     context_features = list(zip(match_origin, match_lower, match_lemma, context_tf))
     if not args.wv_cased:
         context_tokens = context_tokens_lower
@@ -122,7 +134,7 @@ def annotate(row):
 
 
 def index_answer(row):
-    token_span = row[-4]
+    token_span = row[-4] #context_token_span
     starts, ends = zip(*token_span)
     answer_start = row[-2]
     answer_end = row[-1]
@@ -131,7 +143,7 @@ def index_answer(row):
     except ValueError:
         return row[:-3] + (None, None)
 
-
+# with multiprocess(corresponding to number of cpu)
 with Pool(args.threads, initializer=init) as p:
     train = list(tqdm(p.imap(annotate, train, chunksize=args.batch_size), total=len(train), desc='train'))
     dev = list(tqdm(p.imap(annotate, dev, chunksize=args.batch_size), total=len(dev), desc='dev  '))
@@ -141,15 +153,17 @@ train = list(filter(lambda x: x[-1] is not None, train))
 log.info('drop {} inconsistent samples.'.format(initial_len - len(train)))
 log.info('tokens generated')
 
+# row : id_, context_tokens, context_features, context_tags, context_ents,
+#       question_tokens, context, context_token_span, (answer_start, answer_end)
 
-# load vocabulary from word vector files
+
+# load vocabulary from word vector files (Glove)
 wv_vocab = set()
 with open(wv_file) as f:
     for line in f:
         token = normalize_text(line.rstrip().split(' ')[0])
         wv_vocab.add(token)
 log.info('glove vocab loaded.')
-
 
 def build_vocab(questions, contexts):
     """
@@ -170,19 +184,20 @@ def build_vocab(questions, contexts):
     matched = sum(counter[t] for t in vocab)
     log.info('vocab coverage {1}/{0} | OOV occurrence {2}/{3} ({4:.4f}%)'.format(
         len(counter), len(vocab), (total - matched), total, (total - matched) / total * 100))
-    vocab.insert(0, "<PAD>")
+    vocab.insert(0, "<PAD>") # in question_id and context_id, the 0 means padding
     vocab.insert(1, "<UNK>")
     return vocab, counter
 
 
 full = train + dev
+# row[5] = question_tokens, row[1] = context_tokens
 vocab, counter = build_vocab([row[5] for row in full], [row[1] for row in full])
-counter_tag = collections.Counter(w for row in full for w in row[3])
-vocab_tag = sorted(counter_tag, key=counter_tag.get, reverse=True)
+counter_tag = collections.Counter(w for row in full for w in row[3]) #context_tags
+vocab_tag = sorted(counter_tag, key=counter_tag.get, reverse=True) # high rank with larger count
 counter_ent = collections.Counter(w for row in full for w in row[4])
 vocab_ent = sorted(counter_ent, key=counter_ent.get, reverse=True)
 w2id = {w: i for i, w in enumerate(vocab)}
-tag2id = {w: i for i, w in enumerate(vocab_tag)}
+tag2id = {w: i for i, w in enumerate(vocab_tag)} # larger count(hight rank) with small index
 ent2id = {w: i for i, w in enumerate(vocab_ent)}
 log.info('Vocabulary size: {}'.format(len(vocab)))
 log.info('Found {} POS tags.'.format(len(vocab_tag)))
@@ -201,12 +216,14 @@ def to_id(row, unk_id=1):
     ent_ids = [ent2id[w] for w in context_ents]
     return (row[0], context_ids, context_features, tag_ids, ent_ids, question_ids) + row[6:]
 
+# row : id_, context_ids, context_features, tag_ids, ent_ids, question_ids,
+#       context, context_token_span, answer_start, answer_end
 
 train = list(map(to_id, train))
 dev = list(map(to_id, dev))
 log.info('converted to ids.')
 
-
+# Glove emebedding
 vocab_size = len(vocab)
 embeddings = np.zeros((vocab_size, wv_dim))
 embed_counts = np.zeros(vocab_size)
@@ -221,6 +238,9 @@ with open(wv_file) as f:
             embeddings[word_id] += [float(v) for v in elems[1:]]
 embeddings /= embed_counts.reshape((-1, 1))
 log.info('got embedding matrix.')
+
+##TODO: char-level embedding
+
 
 meta = {
     'vocab': vocab,

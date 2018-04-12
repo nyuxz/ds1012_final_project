@@ -121,7 +121,7 @@ log.addHandler(ch)
 
 def test_loader():
     '''
-    this function used to test dataloader and print input data/check dimensions 
+    this function used to test dataloader and print input data/check dimensions
     '''
 
     log.info('[program starts.]')
@@ -129,7 +129,7 @@ def test_loader():
     log.info(opt)
     log.info('[Data loaded.]')
 
-    # test dataloader 
+    # test dataloader
     batches = BatchGen(opt, train, batch_size=1, gpu=False)
 
     for i, batch in enumerate(batches):
@@ -242,5 +242,3 @@ def main():
 if __name__ == '__main__':
     #test_loader()
     main()
-
-
