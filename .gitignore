@@ -1,12 +1,18 @@
 SQuAD/*
 *.log
 glove/*
-*.ipynb
-src/__pycache__/*
-*.DS_Store
-*.DS_Store
+char/*
+*.txt
+
 # Prerequisites
 *.d
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# System files
+.DS_Store
 
 
 # Installer logs
