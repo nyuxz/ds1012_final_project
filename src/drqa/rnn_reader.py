@@ -106,12 +106,14 @@ class RnnDocReader(nn.Module):
             question_hidden_size,
         )
 
-    def forward(self, x1, x1_f, x1_pos, x1_ner, x1_mask, x2, x2_mask):
+    def forward(self, x1, x1_f, x1_pos, x1_ner, x1_iob_np, x1_iob_ner, x1_mask, x2, x2_mask):
         """Inputs:
         x1 = document word indices             [batch * len_d]
         x1_f = document word features indices  [batch * len_d * nfeat]
         x1_pos = document POS tags             [batch * len_d]
         x1_ner = document entity tags          [batch * len_d]
+        x1_iob_np
+        x1_iob_ner
         x1_mask = document padding mask        [batch * len_d]
         x2 = question word indices             [batch * len_q]
         x2_mask = question padding mask        [batch * len_q]
@@ -142,8 +144,8 @@ class RnnDocReader(nn.Module):
             drnn_input_list.append(x1_charembed)
         if self.opt['iob_np']:
             drnn_input_list.append(x1_iob_np)
-        if self.opt['iob_np']:
-            drnn_input_list.append(x1_iob_np)
+        if self.opt['iob_ner']:
+            drnn_input_list.append(x1_iob_ner)
         if self.opt['part_ner']:
             drnn_input_list.append(x1_part_ner)
         if self.opt['wwwwh']:

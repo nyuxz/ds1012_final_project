@@ -39,8 +39,10 @@ class BatchGen:
     def __init__(self, opt, data, batch_size, gpu, evaluation=False):
         """
         input:
-            data - list of lists
+            data(train/dev) - list of lists
             batch_size - int
+        # train: id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids,
+        #        question_id, context, context_token_span, answer_start, answer_end
         """
         self.opt = opt
         self.batch_size = batch_size
@@ -64,9 +66,9 @@ class BatchGen:
             batch_size = len(batch)
             batch = list(zip(*batch))
             if self.eval:
-                assert len(batch) == 8
-            else:
                 assert len(batch) == 10
+            else:
+                assert len(batch) == 12 # ## TODO: change here if add more features
 
             context_len = max(len(x) for x in batch[1])
             context_id = torch.LongTensor(batch_size, context_len).fill_(0)
@@ -90,31 +92,45 @@ class BatchGen:
                 for j, ent in enumerate(doc):
                     context_ent[i, j, ent] = 1
 
-            question_len = max(len(x) for x in batch[5])
-            question_id = torch.LongTensor(batch_size, question_len).fill_(0)
+            ### add new feature here ###
+            context_iob_np = torch.Tensor(batch_size, context_len, self.opt['iob_np_size']).fill_(0)
             for i, doc in enumerate(batch[5]):
+                for j, iob_np in enumerate(doc):
+                    context_iob_np[i, j, iob_np] = 1
+
+            context_iob_ner = torch.Tensor(batch_size, context_len, self.opt['iob_ner_size']).fill_(0)
+            for i, doc in enumerate(batch[6]):
+                for j, iob_ner in enumerate(doc):
+                    context_iob_ner[i, j, iob_ner] = 1
+
+
+            question_len = max(len(x) for x in batch[7])
+            question_id = torch.LongTensor(batch_size, question_len).fill_(0)
+            for i, doc in enumerate(batch[7]):
                 question_id[i, :len(doc)] = torch.LongTensor(doc)
 
             # mask: if id is 0, then mask is 1, otherwise mask is 0
             # in question_id and context_id, the 0 means padding
             context_mask = torch.eq(context_id, 0)
             question_mask = torch.eq(question_id, 0)
-            text = list(batch[6])
-            span = list(batch[7])
+            text = list(batch[8])
+            span = list(batch[9])
             if not self.eval:
-                y_s = torch.LongTensor(batch[8])
-                y_e = torch.LongTensor(batch[9])
+                y_s = torch.LongTensor(batch[10])
+                y_e = torch.LongTensor(batch[11])
             if self.gpu:
                 context_id = context_id.pin_memory()
                 context_feature = context_feature.pin_memory()
                 context_tag = context_tag.pin_memory()
                 context_ent = context_ent.pin_memory()
+                context_iob_np = context_iob_np.pin_memory()
+                context_iob_ner = context_iob_ner.pin_memory()
                 context_mask = context_mask.pin_memory()
                 question_id = question_id.pin_memory()
                 question_mask = question_mask.pin_memory()
             if self.eval:
-                yield (context_id, context_feature, context_tag, context_ent, context_mask,
+                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_mask,
                        question_id, question_mask, text, span)
             else:
-                yield (context_id, context_feature, context_tag, context_ent, context_mask,
+                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner,context_mask,
                        question_id, question_mask, y_s, y_e, text, span)

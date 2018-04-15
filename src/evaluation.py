@@ -58,4 +58,3 @@ def score(pred, truth):
     em = 100. * em / total
     f1 = 100. * f1 / total
     return em, f1
-
