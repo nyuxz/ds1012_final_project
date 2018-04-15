@@ -20,5 +20,4 @@ module load cudnn/8.0v5.1
 module load msgpack
 
 
-
 time python3 src/main.py

@@ -16,6 +16,7 @@ def load_data(opt):
     with open('SQuAD/meta.msgpack', 'rb') as f:
         meta = msgpack.load(f, encoding='utf8')
     embedding = torch.Tensor(meta['embedding'])
+    #char_embedding = torch.Tensor(meta['char_embeddings'])
     opt['pretrained_words'] = True
     opt['vocab_size'] = embedding.size(0)
     opt['embedding_dim'] = embedding.size(1)
@@ -27,7 +28,7 @@ def load_data(opt):
     data['dev'].sort(key=lambda x: len(x[1]))
     dev = [x[:-1] for x in data['dev']]
     dev_y = [x[-1] for x in data['dev']]
-    return train, dev, dev_y, embedding, opt
+    return train, dev, dev_y, embedding, opt#, char_embedding
 
 class BatchGen:
     def __init__(self, opt, data, batch_size, gpu, evaluation=False):

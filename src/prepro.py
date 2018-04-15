@@ -11,6 +11,7 @@ from multiprocessing import Pool
 from utils import str2bool
 from tqdm import tqdm
 import logging
+from char_embedding import CharEmbedding
 
 parser = argparse.ArgumentParser(
     description='Preprocessing data files, about 10 minitues to run.'
@@ -133,6 +134,11 @@ def annotate(row):
             question_tokens, context, context_token_span) + row[3:]
 
 
+##############################
+## TODO: add IOB feture here #
+##############################
+
+
 def index_answer(row):
     token_span = row[-4] #context_token_span
     starts, ends = zip(*token_span)
@@ -182,6 +188,7 @@ def build_vocab(questions, contexts):
                         key=counter.get, reverse=True)
     total = sum(counter.values())
     matched = sum(counter[t] for t in vocab)
+    # out of vocb of pretrained glove
     log.info('vocab coverage {1}/{0} | OOV occurrence {2}/{3} ({4:.4f}%)'.format(
         len(counter), len(vocab), (total - matched), total, (total - matched) / total * 100))
     vocab.insert(0, "<PAD>") # in question_id and context_id, the 0 means padding
@@ -235,21 +242,42 @@ with open(wv_file) as f:
         if token in w2id:
             word_id = w2id[token]
             embed_counts[word_id] += 1
-            embeddings[word_id] += [float(v) for v in elems[1:]]
-embeddings /= embed_counts.reshape((-1, 1))
-log.info('got embedding matrix.')
+            embeddings[word_id] += [float(v) for v in elems[1:]] #sum glove vector for all count
+embeddings /= embed_counts.reshape((-1, 1)) # take mean
+log.info('got glove embedding matrix.')
 
-##TODO: char-level embedding
+# new embedding: char-level embedding
+charembedding = CharEmbedding()
+vocab_size = len(vocab)
+char_embeddings = np.zeros((vocab_size, 100))
+char_embed_counts = np.zeros(vocab_size)
+char_embed_counts[:2] = 1  # PADDING & UNK
+for token in w2id:
+    word_id = w2id[token]
+    char_embed_counts[word_id] += 1
+    char_embeddings[word_id] += charembedding.emb(token)
+char_embeddings /= char_embed_counts.reshape((-1, 1))
+log.info('got character embedding matrix.')
 
+
+# concatenate glove with charembedding to 400 dim word vector embedding layer
+glove_char_embedding = np.concatenate((embeddings, char_embeddings), axis=1)
+log.info('got concatenation embedding matrix.')
+
+#------------------Save-----------------------------
 
 meta = {
     'vocab': vocab,
     'vocab_tag': vocab_tag,
     'vocab_ent': vocab_ent,
-    'embedding': embeddings.tolist()
+    'embedding': embeddings.tolist(),
+    'char_embedding': char_embeddings.tolist(), # in the case we need train embedding using pretrained char-level weights
+    'glove_char_embedding': glove_char_embedding.tolist()
 }
 with open('SQuAD/meta.msgpack', 'wb') as f:
     msgpack.dump(meta, f)
+
+
 result = {
     'train': train,
     'dev': dev

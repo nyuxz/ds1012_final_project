@@ -92,6 +92,23 @@ parser.add_argument('--max_len', type=int, default=15)
 parser.add_argument('--rnn_type', default='lstm',
                     help='supported types: rnn, gru, lstm')
 
+# new embedding layers
+parser.add_argument('--iob_ner', type=str2bool, nargs='?', const=True, default=False,
+                    help='begin_ner, in_ner, out_ner')
+parser.add_argument('--iob_np', type=str2bool, nargs='?', const=True, default=False,
+                    help='begin_np, in_np, out_np')
+parser.add_argument('--charembed', type=str2bool, nargs='?', const=True, default=False,
+                    help='character n-gram embedding')
+parser.add_argument('--part_ner', type=str2bool, nargs='?', const=True, default=False,
+                    help='part of ner tag')
+parser.add_argument('--wwwwh', type=str2bool, nargs='?', const=True, default=False,
+                    help='when, what, who/whom, which, how')
+parser.add_argument('--iob_ner_size', type=int, default=3)
+parser.add_argument('--iob_np_size', type=int, default=3)
+parser.add_argument('--charembed_size', type=int, default=100)
+parser.add_argument('--part_ner_size', type=int, default=2)
+parser.add_argument('--wwwwh_size', type=int, default=6)
+
 args = parser.parse_args()
 
 # set model dir
@@ -171,6 +188,8 @@ def test_loader():
 
 def main():
     log.info('[program starts.]')
+
+    #load data
     train, dev, dev_y, embedding, opt = load_data(vars(args))
     log.info(opt)
     log.info('[Data loaded.]')

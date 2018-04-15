@@ -25,9 +25,9 @@ class RnnDocReader(nn.Module):
                 assert opt['tune_partial'] == 0
                 for p in self.embedding.parameters():
                     p.requires_grad = False
-            elif opt['tune_partial'] > 0:
+            elif opt['tune_partial'] > 0: # fine-tune 1000 most frequent [question] words
                 assert opt['tune_partial'] + 2 < embedding.size(0)
-                fixed_embedding = embedding[opt['tune_partial'] + 2:]
+                fixed_embedding = embedding[opt['tune_partial'] + 2:] # other words embedding keep fixed
                 self.register_buffer('fixed_embedding', fixed_embedding)
                 self.fixed_embedding = fixed_embedding
         else:  # random initialized
@@ -46,6 +46,18 @@ class RnnDocReader(nn.Module):
             doc_input_size += opt['pos_size']
         if opt['ner']:
             doc_input_size += opt['ner_size']
+
+        # new embedding layers /token features
+        if opt['charembed']:
+            doc_input_size += opt['charembed_size'] #100
+        if opt['iob_np']:
+            doc_input_size += opt['iob_np_size'] #3
+        if opt['iob_ner']:
+            doc_input_size += opt['iob_ner_size'] #3
+        if opt['wwwwh']:
+            doc_input_size += opt['wwwwh_size'] # 6
+        if opt['part_ner']:
+            doc_input_size += opt['part_ner_size'] #2
 
         # RNN document encoder
         self.doc_rnn = layers.StackedBRNN(
@@ -94,7 +106,7 @@ class RnnDocReader(nn.Module):
             question_hidden_size,
         )
 
-    def forward(self, x1, x1_f, x1_pos, x1_ner, x1_mask, x2, x2_mask):
+    def forward(self, x1, x1_f, x1_pos, x1_ner, x1_mask, x2, x2_mask, x1_charembed):
         """Inputs:
         x1 = document word indices             [batch * len_d]
         x1_f = document word features indices  [batch * len_d * nfeat]
@@ -124,6 +136,20 @@ class RnnDocReader(nn.Module):
             drnn_input_list.append(x1_pos)
         if self.opt['ner']:
             drnn_input_list.append(x1_ner)
+
+        # new embedding layers
+        if self.opt['charembed']:
+            drnn_input_list.append(x1_charembed)
+        if self.opt['iob_np']:
+            drnn_input_list.append(x1_iob_np)
+        if self.opt['iob_np']:
+            drnn_input_list.append(x1_iob_np)
+        if self.opt['part_ner']:
+            drnn_input_list.append(x1_part_ner)
+        if self.opt['wwwwh']:
+            drnn_input_list.append(x1_wwwwh)
+
+
         drnn_input = torch.cat(drnn_input_list, 2)
         # Encode document with RNN
         doc_hiddens = self.doc_rnn(drnn_input, x1_mask)

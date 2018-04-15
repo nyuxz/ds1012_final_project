@@ -110,7 +110,7 @@ class DocReaderModel(object):
         score_s = score_s.data.cpu()
         score_e = score_e.data.cpu()
 
-        # Get argmax text spans 
+        # Get argmax text spans
         text = ex[-2]
         spans = ex[-1]
         predictions = []
