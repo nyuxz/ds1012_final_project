@@ -15,7 +15,12 @@ import msgpack
 def load_data(opt):
     with open('SQuAD/meta.msgpack', 'rb') as f:
         meta = msgpack.load(f, encoding='utf8')
-    embedding = torch.Tensor(meta['embedding'])
+
+    if opt['glove_char_embedding'] == True:
+        embedding = torch.Tensor(meta['glove_char_embedding'])
+    else:
+        embedding = torch.Tensor(meta['embedding'])
+
     #char_embedding = torch.Tensor(meta['char_embeddings'])
     opt['pretrained_words'] = True
     opt['vocab_size'] = embedding.size(0)

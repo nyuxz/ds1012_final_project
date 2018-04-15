@@ -93,6 +93,8 @@ parser.add_argument('--rnn_type', default='lstm',
                     help='supported types: rnn, gru, lstm')
 
 # new embedding layers
+parser.add_argument('--glove_char_embedding', type=str2bool, nargs='?', const=True, default=False,
+                    help='train concatenation of glove and character embedding')
 parser.add_argument('--iob_ner', type=str2bool, nargs='?', const=True, default=False,
                     help='begin_ner, in_ner, out_ner')
 parser.add_argument('--iob_np', type=str2bool, nargs='?', const=True, default=False,
