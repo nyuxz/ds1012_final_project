@@ -4,6 +4,11 @@ glove/*
 char/*
 *.txt
 
+
+drqa/__pycache__/
+models/
+*.log
+
 # Prerequisites
 *.d
 
