@@ -21,7 +21,7 @@ def load_data(opt):
     else:
         embedding = torch.Tensor(meta['embedding'])
 
-    #char_embedding = torch.Tensor(meta['char_embeddings'])
+    #char_embedding = torch.Tensor(meta['char_embedding'])
     opt['pretrained_words'] = True
     opt['vocab_size'] = embedding.size(0)
     opt['embedding_dim'] = embedding.size(1)
@@ -68,7 +68,7 @@ class BatchGen:
             if self.eval:
                 assert len(batch) == 10
             else:
-                assert len(batch) == 12 # ## TODO: change here if add more features
+                assert len(batch) == 13 # ## TODO: change here if add more features
 
             context_len = max(len(x) for x in batch[1])
             context_id = torch.LongTensor(batch_size, context_len).fill_(0)
@@ -103,21 +103,25 @@ class BatchGen:
                 for j, iob_ner in enumerate(doc):
                     context_iob_ner[i, j, iob_ner] = 1
 
-
-            question_len = max(len(x) for x in batch[7])
-            question_id = torch.LongTensor(batch_size, question_len).fill_(0)
+            context_part_ner = torch.Tensor(batch_size, context_len, self.opt['part_ner_size']).fill_(0)
             for i, doc in enumerate(batch[7]):
+                for j, part_ner in enumerate(doc):
+                    context_part_ner[i, j, part_ner] = 1
+
+            question_len = max(len(x) for x in batch[8])
+            question_id = torch.LongTensor(batch_size, question_len).fill_(0)
+            for i, doc in enumerate(batch[8]):
                 question_id[i, :len(doc)] = torch.LongTensor(doc)
 
             # mask: if id is 0, then mask is 1, otherwise mask is 0
             # in question_id and context_id, the 0 means padding
             context_mask = torch.eq(context_id, 0)
             question_mask = torch.eq(question_id, 0)
-            text = list(batch[8])
-            span = list(batch[9])
+            text = list(batch[9])
+            span = list(batch[10])
             if not self.eval:
-                y_s = torch.LongTensor(batch[10])
-                y_e = torch.LongTensor(batch[11])
+                y_s = torch.LongTensor(batch[11])
+                y_e = torch.LongTensor(batch[12])
             if self.gpu:
                 context_id = context_id.pin_memory()
                 context_feature = context_feature.pin_memory()
@@ -125,12 +129,13 @@ class BatchGen:
                 context_ent = context_ent.pin_memory()
                 context_iob_np = context_iob_np.pin_memory()
                 context_iob_ner = context_iob_ner.pin_memory()
+                context_part_ner = context_part_ner.pin_memory()
                 context_mask = context_mask.pin_memory()
                 question_id = question_id.pin_memory()
                 question_mask = question_mask.pin_memory()
             if self.eval:
-                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_mask,
-                       question_id, question_mask, text, span)
+                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+                        context_mask, question_id, question_mask, text, span)
             else:
-                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner,context_mask,
-                       question_id, question_mask, y_s, y_e, text, span)
+                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+                        context_mask, question_id, question_mask, y_s, y_e, text, span)

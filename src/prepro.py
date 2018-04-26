@@ -95,7 +95,9 @@ def init():
     global nlp
     nlp = spacy.load('en', parser=False)
 
-# new functions for new features/embedding layers stuffs
+
+#------------new functions for new features/embedding layers stuffs------------------
+## iob tag for noun phrases
 def iob_np_tag(tag_list):
     '''
     function for creating iob_np
@@ -114,6 +116,7 @@ def iob_np_tag(tag_list):
         i +=1
     return iob_np
 
+## iob tag for NER
 def iob_ner_tag(tag_list):
     '''
     function for creating iob_ner
@@ -132,6 +135,32 @@ def iob_ner_tag(tag_list):
         i +=1
     return iob_ner
 
+## Part of NER tag
+stop_words = ['a', 'an', 'the', 'of', 'for', '\'s', 'For', 'The', 'A', 'An']
+def part_ner_tag(tag_list, context_list):
+    '''
+    @in: a list of ner tags
+    @out: part of ner tags
+    '''
+    ner_context = []
+    part_ner = ['o_ner'] * len(tag_list)
+    for i in range(len(tag_list)):
+        if len(tag_list[i]) != 0 and context_list[i] not in stop_words:
+            part_ner[i] = 'i_ner'
+            ner_context.append(context_list[i])
+
+    # combine lemma to ner_context list
+    ner_context_str = ' '.join(ner_context)
+    ner_context_ = nlp(ner_context_str)
+    ner_context_lemma = [w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower() for w in ner_context_]
+    ner_context_all = ner_context_lemma +  ner_context
+
+    for j in range(len(context_list)):
+        if context_list[j] in ner_context_all:
+            part_ner[j] = 'i_ner'
+    return part_ner
+#--------------------------------------------------------------------------------
+
 def annotate(row):
     '''
     notice: the tagging feature only apply on context
@@ -149,6 +178,7 @@ def annotate(row):
     context_ents = [w.ent_type_ for w in c_doc] # NER tagging
     context_iob_np = iob_np_tag(context_tags) # iob_np
     context_iob_ner = iob_ner_tag(context_ents) #iob_ner
+    context_part_ner = part_ner_tag(context_ents, context_tokens) #part_ner
 
     question_lemma = {w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower() for w in q_doc}
     # PRON is such as me/it/you
@@ -169,7 +199,7 @@ def annotate(row):
     if not args.wv_cased:
         context_tokens = context_tokens_lower
         question_tokens = question_tokens_lower
-    return (id_, context_tokens, context_features, context_tags, context_ents, context_iob_np, context_iob_ner,
+    return (id_, context_tokens, context_features, context_tags, context_ents, context_iob_np, context_iob_ner, context_part_ner,
             question_tokens, context, context_token_span) + row[3:]
 
 ##############################
@@ -252,18 +282,25 @@ vocab_iob_np = sorted(counter_iob_np, key=counter_iob_np.get, reverse=True)
 counter_iob_ner = collections.Counter(w for row in full for w in row[6])
 vocab_iob_ner = sorted(counter_iob_ner, key=counter_iob_ner.get, reverse=True)
 
+#part_ner
+counter_part_ner = collections.Counter(w for row in full for w in row[7])
+vocab_part_ner = sorted(counter_part_ner, key=counter_part_ner.get, reverse=True)
 
 w2id = {w: i for i, w in enumerate(vocab)}
 tag2id = {w: i for i, w in enumerate(vocab_tag)} # larger count(hight rank) with small index
 ent2id = {w: i for i, w in enumerate(vocab_ent)}
 iob_np2id = {w: i for i, w in enumerate(vocab_iob_np)}
 iob_ner2id = {w: i for i, w in enumerate(vocab_iob_ner)}
+part_ner2id = {w: i for i, w in enumerate(vocab_part_ner)}
+
 
 log.info('Vocabulary size: {}'.format(len(vocab)))
 log.info('Found {} POS tags.'.format(len(vocab_tag))) #50
 log.info('Found {} entity tags: {}'.format(len(vocab_ent), vocab_ent)) #19
 log.info('Found {} iob_np tags.'.format(len(vocab_iob_np))) #3
 log.info('Found {} iob_ner tags.'.format(len(vocab_iob_ner))) #3
+log.info('Found {} part_ner tags.'.format(len(vocab_part_ner))) #2
+
 
 
 def to_id(row, unk_id=1):
@@ -273,7 +310,8 @@ def to_id(row, unk_id=1):
     context_ents = row[4]
     context_iob_np = row[5]
     context_iob_ner = row[6]
-    question_tokens = row[7]
+    context_part_ner = row[7]
+    question_tokens = row[8]
 
     question_ids = [w2id[w] if w in w2id else unk_id for w in question_tokens]
     context_ids = [w2id[w] if w in w2id else unk_id for w in context_tokens]
@@ -281,8 +319,9 @@ def to_id(row, unk_id=1):
     ent_ids = [ent2id[w] for w in context_ents]
     iob_np_ids = [iob_np2id[w] for w in context_iob_np]
     iob_ner_ids = [iob_ner2id[w] for w in context_iob_ner]
+    part_ner_ids = [part_ner2id[w] for w in context_part_ner]
 
-    return (row[0], context_ids, context_features, tag_ids, ent_ids, iob_np_ids, iob_ner_ids, question_ids) + row[8:]
+    return (row[0], context_ids, context_features, tag_ids, ent_ids, iob_np_ids, iob_ner_ids, part_ner_ids, question_ids) + row[9:]
 
 
 train = list(map(to_id, train))
@@ -333,7 +372,8 @@ meta = {
     'char_embedding': char_embeddings.tolist(), # in the case we need train embedding using pretrained char-level weights
     'glove_char_embedding': glove_char_embedding.tolist(),
     'vocab_iob_np': vocab_iob_np,
-    'vocab_iob_ner': vocab_iob_ner
+    'vocab_iob_ner': vocab_iob_ner,
+    'vocab_part_ner': vocab_part_ner
 }
 with open('SQuAD/meta.msgpack', 'wb') as f:
     msgpack.dump(meta, f)
@@ -343,9 +383,9 @@ result = {
     'train': train,
     'dev': dev
 }
-# train: id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids,
+# train: id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids,part_ner_ids,
 #        question_id, context, context_token_span, answer_start, answer_end
-# dev:   id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids
+# dev:   id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids, part_ner_ids,
 #        question_id, context, context_token_span, answer
 with open('SQuAD/data.msgpack', 'wb') as f:
     msgpack.dump(result, f)
