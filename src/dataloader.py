@@ -41,7 +41,7 @@ class BatchGen:
         input:
             data(train/dev) - list of lists
             batch_size - int
-        # train: id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids,
+        # train: id, context_id, context_features, tag_id, ent_id, iob_np_ids, iob_ner_ids, part_ner_ids,
         #        question_id, context, context_token_span, answer_start, answer_end
         """
         self.opt = opt
@@ -66,7 +66,7 @@ class BatchGen:
             batch_size = len(batch)
             batch = list(zip(*batch))
             if self.eval:
-                assert len(batch) == 10
+                assert len(batch) == 11
             else:
                 assert len(batch) == 13 # ## TODO: change here if add more features
 
