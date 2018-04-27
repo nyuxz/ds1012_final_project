@@ -111,6 +111,8 @@ parser.add_argument('--charembed_size', type=int, default=100)
 parser.add_argument('--part_ner_size', type=int, default=2)
 parser.add_argument('--wwwwh_size', type=int, default=6)
 
+parser.add_argument('--multi_level_question', type=str2bool, nargs='?', const=True, default=False,
+                    help='if add pos, ner, iob, part_ner for question')
 args = parser.parse_args()
 
 # set model dir

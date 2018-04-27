@@ -38,7 +38,7 @@ class RnnDocReader(nn.Module):
         if opt['use_qemb']:
             self.qemb_match = layers.SeqAttnMatch(opt['embedding_dim'])
 
-        # Input size to RNN: word emb + question emb + manual features
+        # Input size to RNN: word emb + question emb + manual features + new features
         doc_input_size = opt['embedding_dim'] + opt['num_features']
         if opt['use_qemb']:
             doc_input_size += opt['embedding_dim']
@@ -46,10 +46,7 @@ class RnnDocReader(nn.Module):
             doc_input_size += opt['pos_size']
         if opt['ner']:
             doc_input_size += opt['ner_size']
-
         # new embedding layers /token features
-        if opt['charembed']:
-            doc_input_size += opt['charembed_size'] #100
         if opt['iob_np']:
             doc_input_size += opt['iob_np_size'] #3
         if opt['iob_ner']:
@@ -58,6 +55,18 @@ class RnnDocReader(nn.Module):
             doc_input_size += opt['wwwwh_size'] # 6
         if opt['part_ner']:
             doc_input_size += opt['part_ner_size'] #2
+
+
+        # question size to RNN: word emb + question emb + manual features + new features
+        question_size = opt['embedding_dim']
+        if opt['pos']:
+            question_size += opt['q_pos_size']
+        if opt['ner']:
+            question_size += opt['q_ner_size']
+        if opt['iob_np']:
+            question_size += opt['q_iob_np_size']
+        if opt['iob_ner']:
+            question_size += opt['q_iob_ner_size']
 
         # RNN document encoder
         self.doc_rnn = layers.StackedBRNN(
@@ -72,16 +81,31 @@ class RnnDocReader(nn.Module):
         )
 
         # RNN question encoder
-        self.question_rnn = layers.StackedBRNN(
-            input_size=opt['embedding_dim'],
-            hidden_size=opt['hidden_size'],
-            num_layers=opt['question_layers'],
-            dropout_rate=opt['dropout_rnn'],
-            dropout_output=opt['dropout_rnn_output'],
-            concat_layers=opt['concat_rnn_layers'],
-            rnn_type=self.RNN_TYPES[opt['rnn_type']],
-            padding=opt['rnn_padding'],
-        )
+
+        if opt['multi_level_question']:
+            # RNN question encoder(adding new feature to question also)
+            self.question_rnn = layers.StackedBRNN(
+                input_size=question_size, #here need change
+                hidden_size=opt['hidden_size'],
+                num_layers=opt['question_layers'],
+                dropout_rate=opt['dropout_rnn'],
+                dropout_output=opt['dropout_rnn_output'],
+                concat_layers=opt['concat_rnn_layers'],
+                rnn_type=self.RNN_TYPES[opt['rnn_type']],
+                padding=opt['rnn_padding'],
+            )
+        else:
+            self.question_rnn = layers.StackedBRNN(
+                input_size=opt['embedding_dim'],
+                hidden_size=opt['hidden_size'],
+                num_layers=opt['question_layers'],
+                dropout_rate=opt['dropout_rnn'],
+                dropout_output=opt['dropout_rnn_output'],
+                concat_layers=opt['concat_rnn_layers'],
+                rnn_type=self.RNN_TYPES[opt['rnn_type']],
+                padding=opt['rnn_padding'],
+            )
+
 
         # Output sizes of rnn encoders
         doc_hidden_size = 2 * opt['hidden_size']
@@ -106,8 +130,12 @@ class RnnDocReader(nn.Module):
             question_hidden_size,
         )
 
-    def forward(self, x1, x1_f, x1_pos, x1_ner, x1_iob_np, x1_iob_ner,x1_part_ner,x1_mask, x2, x2_mask):
+
+    def forward(self, x1, x1_f, x1_pos, x1_ner, x1_iob_np, x1_iob_ner,x1_part_ner,
+                x2_pos, x2_ner, x2_iob_np, x2_iob_ner, x1_mask, x2,x2_mask):
         """Inputs:
+        context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+        question_tag,question_ent,question_iob_np,question_iob_ner, context_mask, question_id, question_mask,
         x1 = document word indices             [batch * len_d]
         x1_f = document word features indices  [batch * len_d * nfeat]
         x1_pos = document POS tags             [batch * len_d]
@@ -115,57 +143,116 @@ class RnnDocReader(nn.Module):
         x1_iob_np
         x1_iob_ner
         x1_part_ner
+        x2_pos
+        x2_ner
+        x2_iob_np
+        x2_iob_ner
         x1_mask = document padding mask        [batch * len_d]
         x2 = question word indices             [batch * len_q]
         x2_mask = question padding mask        [batch * len_q]
         """
-        # Embed both document and question
-        x1_emb = self.embedding(x1)
-        x2_emb = self.embedding(x2)
 
-        # Dropout on embeddings
-        if self.opt['dropout_emb'] > 0:
-            x1_emb = nn.functional.dropout(x1_emb, p=self.opt['dropout_emb'],
-                                           training=self.training)
-            x2_emb = nn.functional.dropout(x2_emb, p=self.opt['dropout_emb'],
-                                           training=self.training)
+        if len(x2_pos) == 0:
+            # Embed both document and question
+            x1_emb = self.embedding(x1)
+            x2_emb = self.embedding(x2)
 
-        drnn_input_list = [x1_emb, x1_f]
-        # Add attention-weighted question representation
-        if self.opt['use_qemb']:
-            x2_weighted_emb = self.qemb_match(x1_emb, x2_emb, x2_mask)
-            drnn_input_list.append(x2_weighted_emb)
-        if self.opt['pos']:
-            drnn_input_list.append(x1_pos)
-        if self.opt['ner']:
-            drnn_input_list.append(x1_ner)
+            # Dropout on embeddings
+            if self.opt['dropout_emb'] > 0:
+                x1_emb = nn.functional.dropout(x1_emb, p=self.opt['dropout_emb'],
+                                               training=self.training)
+                x2_emb = nn.functional.dropout(x2_emb, p=self.opt['dropout_emb'],
+                                               training=self.training)
 
-        # new embedding layers
-        if self.opt['charembed']:
-            drnn_input_list.append(x1_charembed)
-        if self.opt['iob_np']:
-            drnn_input_list.append(x1_iob_np)
-        if self.opt['iob_ner']:
-            drnn_input_list.append(x1_iob_ner)
-        if self.opt['part_ner']:
-            drnn_input_list.append(x1_part_ner)
-        if self.opt['wwwwh']:
-            drnn_input_list.append(x1_wwwwh)
+            #### multi-level embedding for context
+            drnn_input_list = [x1_emb, x1_f]
+            # Add attention-weighted question representation
+            if self.opt['use_qemb']:
+                x2_weighted_emb = self.qemb_match(x1_emb, x2_emb, x2_mask)
+                drnn_input_list.append(x2_weighted_emb)
+            if self.opt['pos']:
+                drnn_input_list.append(x1_pos)
+            if self.opt['ner']:
+                drnn_input_list.append(x1_ner)
+            if self.opt['iob_np']:
+                drnn_input_list.append(x1_iob_np)
+            if self.opt['iob_ner']:
+                drnn_input_list.append(x1_iob_ner)
+            if self.opt['part_ner']:
+                drnn_input_list.append(x1_part_ner)
+            drnn_input = torch.cat(drnn_input_list, 2)
 
+            # Encode document with RNN
+            doc_hiddens = self.doc_rnn(drnn_input, x1_mask)
 
-        drnn_input = torch.cat(drnn_input_list, 2)
-        # Encode document with RNN
-        doc_hiddens = self.doc_rnn(drnn_input, x1_mask)
+            # Encode question with RNN + merge hiddens
+            question_hiddens = self.question_rnn(x2_emb, x2_mask)
+            if self.opt['question_merge'] == 'avg':
+                q_merge_weights = layers.uniform_weights(question_hiddens, x2_mask)
+            elif self.opt['question_merge'] == 'self_attn':
+                q_merge_weights = self.self_attn(question_hiddens, x2_mask)
+            question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
 
-        # Encode question with RNN + merge hiddens
-        question_hiddens = self.question_rnn(x2_emb, x2_mask)
-        if self.opt['question_merge'] == 'avg':
-            q_merge_weights = layers.uniform_weights(question_hiddens, x2_mask)
-        elif self.opt['question_merge'] == 'self_attn':
-            q_merge_weights = self.self_attn(question_hiddens, x2_mask)
-        question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
+            # Predict start and end positions
+            start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
+            end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
+            return start_scores, end_scores
 
-        # Predict start and end positions
-        start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
-        end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
-        return start_scores, end_scores
+        else: #embedding for question
+            # Embed both document and question
+            x1_emb = self.embedding(x1)
+            x2_emb = self.embedding(x2)
+
+            # Dropout on embeddings
+            if self.opt['dropout_emb'] > 0:
+                x1_emb = nn.functional.dropout(x1_emb, p=self.opt['dropout_emb'],
+                                               training=self.training)
+                x2_emb = nn.functional.dropout(x2_emb, p=self.opt['dropout_emb'],
+                                               training=self.training)
+
+            #### multi-level embedding for context
+            drnn_input_list = [x1_emb, x1_f]
+            # Add attention-weighted question representation
+            if self.opt['use_qemb']:
+                x2_weighted_emb = self.qemb_match(x1_emb, x2_emb, x2_mask)
+                drnn_input_list.append(x2_weighted_emb)
+            if self.opt['pos']:
+                drnn_input_list.append(x1_pos)
+            if self.opt['ner']:
+                drnn_input_list.append(x1_ner)
+            if self.opt['iob_np']:
+                drnn_input_list.append(x1_iob_np)
+            if self.opt['iob_ner']:
+                drnn_input_list.append(x1_iob_ner)
+            if self.opt['part_ner']:
+                drnn_input_list.append(x1_part_ner)
+            drnn_input = torch.cat(drnn_input_list, 2)
+
+            # Encode document with RNN, here we feed multi-level embedding to RNN, encode as hidden cell
+            doc_hiddens = self.doc_rnn(drnn_input, x1_mask)
+
+            ### multi-level embedding for question
+            drnn_question_list = [x2_emb]
+            if self.opt['pos']:
+                drnn_question_list.append(x2_pos)
+            if self.opt['ner']:
+                drnn_question_list.append(x2_ner)
+            if self.opt['iob_np']:
+                drnn_question_list.append(x2_iob_np)
+            if self.opt['iob_ner']:
+                drnn_question_list.append(x2_iob_ner)
+
+            drnn_question = torch.cat(drnn_question_list, 2)
+
+            # Encode question with RNN + merge hiddens
+            question_hiddens = self.question_rnn(drnn_question, x2_mask)
+            if self.opt['question_merge'] == 'avg':
+                q_merge_weights = layers.uniform_weights(question_hiddens, x2_mask)
+            elif self.opt['question_merge'] == 'self_attn':
+                q_merge_weights = self.self_attn(question_hiddens, x2_mask)
+            question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
+
+            # Predict start and end positions
+            start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
+            end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
+            return start_scores, end_scores

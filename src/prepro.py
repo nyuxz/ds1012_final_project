@@ -174,11 +174,18 @@ def annotate(row):
     question_tokens_lower = [w.lower() for w in question_tokens]
     context_tokens_lower = [w.lower() for w in context_tokens]
     context_token_span = [(w.idx, w.idx + len(w.text)) for w in c_doc] # the lenghth of each tokens
+    #for context the new features
     context_tags = [w.tag_ for w in c_doc] # POS tagging
     context_ents = [w.ent_type_ for w in c_doc] # NER tagging
     context_iob_np = iob_np_tag(context_tags) # iob_np
     context_iob_ner = iob_ner_tag(context_ents) #iob_ner
     context_part_ner = part_ner_tag(context_ents, context_tokens) #part_ner
+
+    #for question the new features
+    question_tags = [w.tag_ for w in q_doc] # POS tagging
+    question_ents = [w.ent_type_ for w in q_doc] # NER tagging
+    question_iob_np = iob_np_tag(question_tags) # iob_np
+    question_iob_ner = iob_ner_tag(question_ents) #iob_ner
 
     question_lemma = {w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower() for w in q_doc}
     # PRON is such as me/it/you
@@ -200,11 +207,12 @@ def annotate(row):
         context_tokens = context_tokens_lower
         question_tokens = question_tokens_lower
     return (id_, context_tokens, context_features, context_tags, context_ents, context_iob_np, context_iob_ner, context_part_ner,
+            question_tags,question_ents,question_iob_np,question_iob_ner,
             question_tokens, context, context_token_span) + row[3:]
 
-##############################
-## TODO: add IOB feture here #
-##############################
+################################
+## TODO: add more fetures here #
+################################
 
 
 def index_answer(row):
@@ -286,13 +294,33 @@ vocab_iob_ner = sorted(counter_iob_ner, key=counter_iob_ner.get, reverse=True)
 counter_part_ner = collections.Counter(w for row in full for w in row[7])
 vocab_part_ner = sorted(counter_part_ner, key=counter_part_ner.get, reverse=True)
 
+#question pos
+counter_q_tag = collections.Counter(w for row in full for w in row[8]) #context_tags
+vocab_q_tag = sorted(counter_q_tag, key=counter_q_tag.get, reverse=True) # high rank with larger count
+
+#question ner
+counter_q_ent = collections.Counter(w for row in full for w in row[9])
+vocab_q_ent = sorted(counter_q_ent, key=counter_q_ent.get, reverse=True)
+
+#question iob_np
+counter_q_iob_np = collections.Counter(w for row in full for w in row[10])
+vocab_q_iob_np = sorted(counter_q_iob_np, key=counter_q_iob_np.get, reverse=True)
+
+#question iob_ner
+counter_q_iob_ner = collections.Counter(w for row in full for w in row[11])
+vocab_q_iob_ner = sorted(counter_q_iob_ner, key=counter_q_iob_ner.get, reverse=True)
+
+
 w2id = {w: i for i, w in enumerate(vocab)}
 tag2id = {w: i for i, w in enumerate(vocab_tag)} # larger count(hight rank) with small index
 ent2id = {w: i for i, w in enumerate(vocab_ent)}
 iob_np2id = {w: i for i, w in enumerate(vocab_iob_np)}
 iob_ner2id = {w: i for i, w in enumerate(vocab_iob_ner)}
 part_ner2id = {w: i for i, w in enumerate(vocab_part_ner)}
-
+q_tag2id = {w: i for i, w in enumerate(vocab_q_tag)}
+q_ent2id = {w: i for i, w in enumerate(vocab_q_ent)}
+q_iob_np2id = {w: i for i, w in enumerate(vocab_q_iob_np)}
+q_iob_ner2id = {w: i for i, w in enumerate(vocab_q_iob_ner)}
 
 log.info('Vocabulary size: {}'.format(len(vocab)))
 log.info('Found {} POS tags.'.format(len(vocab_tag))) #50
@@ -301,6 +329,10 @@ log.info('Found {} iob_np tags.'.format(len(vocab_iob_np))) #3
 log.info('Found {} iob_ner tags.'.format(len(vocab_iob_ner))) #3
 log.info('Found {} part_ner tags.'.format(len(vocab_part_ner))) #2
 
+log.info('Found {} question POS tags.'.format(len(vocab_q_tag))) #50
+log.info('Found {} question entity tags: {}'.format(len(vocab_q_tag), vocab_q_tag)) #19
+log.info('Found {} question iob_np tags.'.format(len(vocab_q_iob_np))) #3
+log.info('Found {} question iob_ner tags.'.format(len(vocab_q_iob_ner))) #3
 
 
 def to_id(row, unk_id=1):
@@ -311,9 +343,13 @@ def to_id(row, unk_id=1):
     context_iob_np = row[5]
     context_iob_ner = row[6]
     context_part_ner = row[7]
-    question_tokens = row[8]
 
-    question_ids = [w2id[w] if w in w2id else unk_id for w in question_tokens]
+    q_tags = row[8]
+    q_ents = row[9]
+    q_iob_np = row[10]
+    q_iob_ner = row[11]
+    question_tokens = row[12]
+
     context_ids = [w2id[w] if w in w2id else unk_id for w in context_tokens]
     tag_ids = [tag2id[w] for w in context_tags]
     ent_ids = [ent2id[w] for w in context_ents]
@@ -321,7 +357,14 @@ def to_id(row, unk_id=1):
     iob_ner_ids = [iob_ner2id[w] for w in context_iob_ner]
     part_ner_ids = [part_ner2id[w] for w in context_part_ner]
 
-    return (row[0], context_ids, context_features, tag_ids, ent_ids, iob_np_ids, iob_ner_ids, part_ner_ids, question_ids) + row[9:]
+    question_ids = [w2id[w] if w in w2id else unk_id for w in question_tokens]
+    q_tag_ids = [q_tag2id[w] for w in q_tags]
+    q_ent_ids = [q_ent2id[w] for w in q_ents]
+    q_iob_np_ids = [q_iob_np2id[w] for w in q_iob_np]
+    q_iob_ner_ids = [q_iob_ner2id[w] for w in q_iob_ner]
+
+    return (row[0], context_ids, context_features, tag_ids, ent_ids, iob_np_ids, iob_ner_ids, part_ner_ids,
+            q_tag_ids, q_ent_ids, q_iob_np_ids, q_iob_ner_ids, question_ids) + row[13:]
 
 
 train = list(map(to_id, train))
@@ -373,11 +416,15 @@ meta = {
     'glove_char_embedding': glove_char_embedding.tolist(),
     'vocab_iob_np': vocab_iob_np,
     'vocab_iob_ner': vocab_iob_ner,
-    'vocab_part_ner': vocab_part_ner
+    'vocab_part_ner': vocab_part_ner,
+    'vocab_q_tag': vocab_q_tag,
+    'vocab_q_ent':vocab_q_ent,
+    'vocab_q_iob_np': vocab_q_iob_np,
+    'vocab_q_iob_ner': vocab_q_iob_ner
 }
+
 with open('SQuAD/meta.msgpack', 'wb') as f:
     msgpack.dump(meta, f)
-
 
 result = {
     'train': train,

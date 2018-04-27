@@ -59,20 +59,32 @@ class DocReaderModel(object):
     def update(self, ex):
         # Train mode
         self.network.train()
-        '''
-        ex: context_id, context_feature, context_tag, context_ent, context_iob_np,
-            context_iob_ner, context_part_ner,
-            context_mask, question_id, question_mask, y_s, y_e, text, span
-        '''
         # Transfer to GPU
-        if self.opt['cuda']:
-            inputs = [Variable(e.cuda(async=True)) for e in ex[:10]] # [0, 1, 2, 3, 4, 5, 6, 7,8,9]
-            target_s = Variable(ex[10].cuda(async=True))
-            target_e = Variable(ex[11].cuda(async=True))
+        if self.opt['multi_level_question']:
+            '''
+            ex: context_id, context_feature, context_tag, context_ent, context_iob_np,
+                context_iob_ner, context_part_ner, [[question_tag,question_ent,question_iob_np,question_iob_ner]],
+                context_mask, question_id, question_mask, y_s, y_e, text, span
+            '''
+            if self.opt['cuda']:
+                inputs = [Variable(e.cuda(async=True)) for e in ex[:14]] # [0, 1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13]
+                target_s = Variable(ex[14].cuda(async=True))
+                target_e = Variable(ex[15].cuda(async=True))
+            else:
+                inputs = [Variable(e) for e in ex[:14]]
+                target_s = Variable(ex[14])
+                target_e = Variable(ex[15])
         else:
-            inputs = [Variable(e) for e in ex[:10]]
-            target_s = Variable(ex[10])
-            target_e = Variable(ex[11])
+            if self.opt['cuda']: # 7，8，9，10 is None type, which cannot be cuda
+                #inputs = [Variable(e.cuda(async=True)) for e in ex[0:7]] + [Variable(empty.cuda(async=True)) for e in ex[7:11]] + [Variable(e.cuda(async=True)) for e in ex[11:14]]
+                inputs = [Variable(e.cuda(async=True)) for e in ex[:14]]
+                target_s = Variable(ex[14].cuda(async=True))
+                target_e = Variable(ex[15].cuda(async=True))
+            else:
+                inputs = [Variable(e) for e in ex[:14]]
+                target_s = Variable(ex[14])
+                target_e = Variable(ex[15])
+
 
         # Run forward
         score_s, score_e = self.network(*inputs)
@@ -101,11 +113,18 @@ class DocReaderModel(object):
         self.network.eval()
 
         # Transfer to GPU
-        if self.opt['cuda']:
-            inputs = [Variable(e.cuda(async=True), volatile=True)
-                      for e in ex[:10]]
+        if self.opt['multi_level_question']:
+            if self.opt['cuda']:
+                inputs = [Variable(e.cuda(async=True), volatile=True)
+                          for e in ex[:14]]
+            else:
+                inputs = [Variable(e, volatile=True) for e in ex[:14]]
         else:
-            inputs = [Variable(e, volatile=True) for e in ex[:10]]
+            if self.opt['cuda']:
+                inputs = [Variable(e.cuda(async=True), volatile=True)
+                          for e in ex[:14]]
+            else:
+                inputs = [Variable(e, volatile=True) for e in ex[:14]]
 
         # Run forward
         score_s, score_e = self.network(*inputs)

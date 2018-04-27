@@ -27,6 +27,11 @@ def load_data(opt):
     opt['embedding_dim'] = embedding.size(1)
     opt['pos_size'] = len(meta['vocab_tag'])
     opt['ner_size'] = len(meta['vocab_ent'])
+    opt['q_pos_size'] = len(meta['vocab_q_tag'])
+    opt['q_ner_size'] = len(meta['vocab_q_ent'])
+    opt['q_iob_ner_size'] = len(meta['vocab_q_iob_ner'])
+    opt['q_iob_np_size'] = len(meta['vocab_q_iob_np'])
+
     with open(opt['data_file'], 'rb') as f:
         data = msgpack.load(f, encoding='utf8')
     train = data['train']
@@ -66,11 +71,12 @@ class BatchGen:
             batch_size = len(batch)
             batch = list(zip(*batch))
             if self.eval:
-                assert len(batch) == 11
+                assert len(batch) == 15
             else:
-                assert len(batch) == 13 # ## TODO: change here if add more features
+                assert len(batch) == 17 # ## TODO: change here if add more features
 
             context_len = max(len(x) for x in batch[1])
+            question_len = max(len(x) for x in batch[12])
             context_id = torch.LongTensor(batch_size, context_len).fill_(0)
             for i, doc in enumerate(batch[1]):
                 context_id[i, :len(doc)] = torch.LongTensor(doc)
@@ -108,20 +114,41 @@ class BatchGen:
                 for j, part_ner in enumerate(doc):
                     context_part_ner[i, j, part_ner] = 1
 
-            question_len = max(len(x) for x in batch[8])
-            question_id = torch.LongTensor(batch_size, question_len).fill_(0)
+            question_tag = torch.Tensor(batch_size, question_len, self.opt['q_pos_size']).fill_(0)
             for i, doc in enumerate(batch[8]):
+                for j, tag in enumerate(doc):
+                    question_tag[i, j, tag] = 1
+
+            question_ent = torch.Tensor(batch_size, question_len, self.opt['q_ner_size']).fill_(0)
+            for i, doc in enumerate(batch[9]):
+                for j, ent in enumerate(doc):
+                    question_ent[i, j, ent] = 1
+
+            ### add new feature here ###
+            question_iob_np = torch.Tensor(batch_size, question_len, self.opt['q_iob_np_size']).fill_(0)
+            for i, doc in enumerate(batch[10]):
+                for j, iob_np in enumerate(doc):
+                    question_iob_np[i, j, iob_np] = 1
+
+            question_iob_ner = torch.Tensor(batch_size, question_len, self.opt['q_iob_ner_size']).fill_(0)
+            for i, doc in enumerate(batch[11]):
+                for j, iob_ner in enumerate(doc):
+                    question_iob_ner[i, j, iob_ner] = 1
+
+            #question_len = max(len(x) for x in batch[12])
+            question_id = torch.LongTensor(batch_size, question_len).fill_(0)
+            for i, doc in enumerate(batch[12]):
                 question_id[i, :len(doc)] = torch.LongTensor(doc)
 
             # mask: if id is 0, then mask is 1, otherwise mask is 0
             # in question_id and context_id, the 0 means padding
             context_mask = torch.eq(context_id, 0)
             question_mask = torch.eq(question_id, 0)
-            text = list(batch[9])
-            span = list(batch[10])
+            text = list(batch[13])
+            span = list(batch[14])
             if not self.eval:
-                y_s = torch.LongTensor(batch[11])
-                y_e = torch.LongTensor(batch[12])
+                y_s = torch.LongTensor(batch[15])
+                y_e = torch.LongTensor(batch[16])
             if self.gpu:
                 context_id = context_id.pin_memory()
                 context_feature = context_feature.pin_memory()
@@ -130,12 +157,26 @@ class BatchGen:
                 context_iob_np = context_iob_np.pin_memory()
                 context_iob_ner = context_iob_ner.pin_memory()
                 context_part_ner = context_part_ner.pin_memory()
+                question_tag = question_tag.pin_memory()
+                question_ent = question_ent.pin_memory()
+                question_iob_np = question_iob_np.pin_memory()
+                question_iob_ner = question_iob_ner.pin_memory()
                 context_mask = context_mask.pin_memory()
                 question_id = question_id.pin_memory()
                 question_mask = question_mask.pin_memory()
-            if self.eval:
-                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
-                        context_mask, question_id, question_mask, text, span)
+
+            if self.opt['multi_level_question']:
+                if self.eval:
+                    yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+                            question_tag,question_ent,question_iob_np,question_iob_ner, context_mask, question_id, question_mask, text, span)
+                else:
+                    yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+                            question_tag,question_ent,question_iob_np,question_iob_ner, context_mask, question_id, question_mask, y_s, y_e, text, span)
             else:
-                yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
-                        context_mask, question_id, question_mask, y_s, y_e, text, span)
+                empty = torch.FloatTensor()
+                if self.eval:
+                    yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+                            empty,empty,empty,empty,context_mask, question_id, question_mask, text, span)
+                else:
+                    yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
+                            empty,empty,empty,empty,context_mask, question_id, question_mask, y_s, y_e, text, span)
