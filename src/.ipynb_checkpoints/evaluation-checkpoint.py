@@ -1,4 +1,4 @@
-__all__ = ['_normalize_answer', '_exact_match', '_f1_score','score']
+# Exact match and F1 Score
 from collections import Counter
 import re
 import string

@@ -136,7 +136,7 @@ def iob_ner_tag(tag_list):
     return iob_ner
 
 ## Part of NER tag
-stop_words = ['a', 'an', 'the', 'of', 'for', '\'s', 'For', 'The', 'A', 'An', ',', ':', '.', ' ,', ', ']
+stop_words = ['a', 'an', 'the', 'of', 'for', '\'s', 'For', 'The', 'A', 'An']
 def part_ner_tag(tag_list, context_list):
     '''
     @in: a list of ner tags

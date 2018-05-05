@@ -1,3 +1,4 @@
+# pip install embeddings
 from embeddings.embedding import Embedding
 import numpy as np
 

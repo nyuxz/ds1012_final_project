@@ -25,6 +25,7 @@ from drqa.model import DocReaderModel
 from evaluation import *
 
 
+
 parser = argparse.ArgumentParser(
     description='Train a Document Reader model.'
 )
@@ -112,7 +113,6 @@ parser.add_argument('--wwwwh_size', type=int, default=6)
 
 parser.add_argument('--multi_level_question', type=str2bool, nargs='?', const=True, default=False,
                     help='if add pos, ner, iob, part_ner for question')
-
 args = parser.parse_args()
 
 # set model dir
