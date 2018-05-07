@@ -35,6 +35,8 @@ parser.add_argument("--cuda", type=str2bool, nargs='?',
                     help='whether to use GPU acceleration.')
 parser.add_argument('--testmodel', default='models/all_with_q/best_model.pt',
                     help='path to model file')
+parser.add_argument('--save_result', default='all_with_q',
+                    help='path to save file')
 
 args = parser.parse_args()
 
@@ -89,33 +91,47 @@ def main():
     if args.cuda:
         model.cuda()
 
-    number_correct = 0
-    correct_id_list = []
+    result_list = []
+    number_error = 0
+    error_id_list = []
     id = 0
-    number_cases = 50
+    number_cases = len(dev)
     batches = iter(BatchGen(opt, dev, batch_size=1, gpu=args.cuda, evaluation=True))
     for id in range(number_cases):
         input = next(batches)
-
         predictions = model.predict(input)
         predict_answer = predictions[0]
         answer = dev_y[id]
         em_score = _exact_match(predict_answer, answer)
         f1_score = _f1_score(predict_answer, answer)
         print('------ Case: {} ------:'.format(id))
-        print('Predictions list:{}'.format(predictions[0:5]))
+        #print('Predictions list:{}'.format(predictions[0:5]))
         print('Predict Answer: {}'.format(predict_answer))
         print('True Answer: {}'.format(answer))
         print('examt match: {}'.format(em_score))
         print('f1 score: {}'.format(f1_score))
-        if f1_score >= 0.5:
-            number_correct +=1
-            correct_id_list.append(id)
 
+        result = {}
+        result["case_id"]= id
+        result["predict_answer"]= predict_answer
+        result["true_answer"]= answer
+        result["em_score"]= em_score
+        result["f1_score"]= f1_score
+        result_list.append(result)
+
+        if f1_score < 0.5:
+            number_error +=1
+            error_id_list.append(id)
         id += 1
-    return correct_id_list
+    print(opt)
+    return error_id_list, number_error/number_cases, result_list
 
 if __name__ == '__main__':
     #test_loader()
-    correct_id_list = main()
-    print('case id with correct answer: {}'.format(correct_id_list))
+    error_id_list, error_percentage, result_list = main()
+
+    with open('results/' + args.save_result +'_result.txt', 'w') as outfile:
+        json.dump(result_list, outfile)
+
+    #print('case id with error answer: {}'.format(error_id_list))
+    print('error percentage: {}'.format(error_percentage))

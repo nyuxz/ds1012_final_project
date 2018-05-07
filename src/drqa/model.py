@@ -148,6 +148,7 @@ class DocReaderModel(object):
 
         return predictions
 
+
     def reset_parameters(self):
         # Reset fixed embeddings to original value
         if self.opt['tune_partial'] > 0:

@@ -165,7 +165,8 @@ class BatchGen:
                 question_id = question_id.pin_memory()
                 question_mask = question_mask.pin_memory()
 
-            if self.opt['multi_level_question']:
+
+            if self.opt['multi_level_question']: #iob + part_ner + question embedding
                 if self.eval:
                     yield (context_id, context_feature, context_tag, context_ent, context_iob_np, context_iob_ner, context_part_ner,
                             question_tag,question_ent,question_iob_np,question_iob_ner, context_mask, question_id, question_mask, text, span)

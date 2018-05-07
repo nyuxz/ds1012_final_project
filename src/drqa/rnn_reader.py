@@ -152,7 +152,7 @@ class RnnDocReader(nn.Module):
         x2_mask = question padding mask        [batch * len_q]
         """
 
-        if len(x2_pos) == 0:
+        if len(x2_pos) == 0: # no embedding for question
             # Embed both document and question
             x1_emb = self.embedding(x1)
             x2_emb = self.embedding(x2)
