@@ -105,7 +105,7 @@ def main():
         em_score = _exact_match(predict_answer, answer)
         f1_score = _f1_score(predict_answer, answer)
         print('------ Case: {} ------:'.format(id))
-        #print('Predictions list:{}'.format(predictions[0:5]))
+        print('Predictions list:{}'.format(predictions[0:5]))
         print('Predict Answer: {}'.format(predict_answer))
         print('True Answer: {}'.format(answer))
         print('examt match: {}'.format(em_score))
