@@ -4,26 +4,32 @@ Multi-level Embedding Representation for Reading Comprehension
 
 [Code]: Our original code is adopted from https://github.com/hitvoice/DrQA.    
 
-## Data
+### Data
 We conduct our experiments on SQuAD. [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) is a reading comprehension benchmark.     
 
-## Our Novel Modification  
+### Our Novel Modification  
 - IOB-NER tagging
 - IOB-NP tagging
 - Part of NER tagging     
 
-## Model Architecture     
+<img src="figure/example.png" width="500">
 
+### Model Architecture     
 
+<img src="figure/model_structure.png" width="500">
 
-## Requirements
+### Result     
+
+<img src="figure/result.png" width="500">
+
+### Requirements
 - python 3.5 
 - pytorch 0.3
 - numpy
 - msgpack
 - spacy 2.0
 
-## Set up     
+### Set up     
 to download data and GloVe     
 ```python
 bash download.sh
