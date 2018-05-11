@@ -12,13 +12,15 @@ We conduct our experiments on SQuAD. [SQuAD](https://rajpurkar.github.io/SQuAD-e
 - IOB-NP tagging
 - Part of NER tagging     
 
+Example of different tagging as shown in following figure. We mark S, I, and O to indicate beginning, middle, and outside of named entities or noun phrases on top of POS and NER tags. In this example, Microsoft Corporation is a named entity. We mark Microsoft as S_NER and Corporation as I_NER. For Part of NER tagging, corporation refers to Microsoft Corporation, thus is marked as P_NER.     
 <img src="figure/example.png" width="500">
 
 ### Model Architecture     
 
-<img src="figure/model_structure.png" width="500">
+<img src="figure/model_structure.png" width="400">
 
 ### Result     
+As shown in following figure, by adding character level embedding, model performance shows improvement. After adding our novel embedding features IOB-NER, IOB-NP, and Part-NER, the model further improved. One interesting finding is that including these IOB features together increases model performance by 0.74%, but adding IOB-NP or IOB-NER alone increases EM score by only 0.04% and 0.12% respectively. After adding Part NER tagging, our best model (Model 8) is able to achieve F1 score at 78.64% and EM score at 69.47%. We also notice that adding question encoding does not contribute much to performance improvement.     
 
 <img src="figure/result.png" width="500">
 
